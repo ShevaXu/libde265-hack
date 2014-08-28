@@ -461,12 +461,20 @@ void VideoDecoder::draw_custom_sao_info(const de265_image* img, uint8_t* dst, in
             for (int cIdx = 0; cIdx < 3; cIdx++) {
                 int SaoTypeIdx = (saoInfo->SaoTypeIdx >> (2*cIdx)) & 0x3;
                 // draw
-//                if (cIdx == 0) {
-//                    tint_rect(dst, stride, x0, y0, compSize, CtbSize, cols[SaoTypeIdx], pixelSize);
-//                }
-//                else
-//                    tint_rect(dst, stride, x0 + (cIdx - 1) * compSize, y0, compSize, CtbSize, cols[SaoTypeIdx], pixelSize);
-                tint_rect(dst, stride, x0 + cIdx * compSize, y0, compSize, CtbSize, cols[SaoTypeIdx], pixelSize);
+                uint32_t col = cols[SaoTypeIdx];
+                if (SaoTypeIdx == 2) {
+                    // EO
+                    int8_t offsets[4];
+                    offsets[0] = abs(saoInfo->saoOffsetVal[cIdx][0]);
+                    offsets[1] = abs(saoInfo->saoOffsetVal[cIdx][1]);
+                    offsets[2] = abs(saoInfo->saoOffsetVal[cIdx][2]);
+                    offsets[3] = abs(saoInfo->saoOffsetVal[cIdx][3]);
+                    // all abs < 1
+                    if (offsets[0] <= 1 && offsets[1] <= 1 && offsets[2] <= 1 && offsets[3] <= 1) {
+                        col = cols[3];
+                    }
+                }
+                tint_rect(dst, stride, x0 + cIdx * compSize, y0, compSize, CtbSize, col, pixelSize);
                 
             }
             //int cIdx = 0;
@@ -474,7 +482,8 @@ void VideoDecoder::draw_custom_sao_info(const de265_image* img, uint8_t* dst, in
             
         }
     }
-    
+    //int8_t temp = -12, t2 = -234;
+    //QTextStream(stdout) << abs(temp) << abs(t2) << endl;
     QTextStream(stdout) << "hello sao world " << CtbsW << "x" << CtbsH << endl;
 }
 
