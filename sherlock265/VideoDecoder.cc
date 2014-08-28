@@ -440,23 +440,38 @@ void VideoDecoder::draw_custom_sao_info(const de265_image* img, uint8_t* dst, in
     // TODO
     
     // red, blue, green
-    uint32_t cols[3] = { 0xff0000, 0x0000ff, 0x00ff00 };
+    // yellow for special value
+    // here for EO with offset abs < 1
+    uint32_t cols[4] = { 0xff0000, 0x0000ff, 0x00ff00, 0xffff00 };
     
     int CtbsH = img->sps.PicHeightInCtbsY;
     int CtbsW = img->sps.PicWidthInCtbsY;
     int CtbSize = img->sps.CtbSizeY;
+    int compSize = CtbSize / 3; // for Y, U and V
     
     for (int yCtb = 0; yCtb < CtbsH - 1; yCtb++)
     {
         for (int xCtb = 0; xCtb < CtbsW; xCtb++)
         {
             const sao_info* saoInfo = img->get_sao_info(xCtb, yCtb);
-            int cIdx = 0;
-            int SaoTypeIdx = (saoInfo->SaoTypeIdx >> (2*cIdx)) & 0x3;
-            // draw
             int x0 = xCtb * CtbSize;
             int y0 = yCtb * CtbSize;
-            tint_rect(dst, stride, x0, y0, CtbSize, CtbSize, cols[SaoTypeIdx], pixelSize);
+            
+            //
+            for (int cIdx = 0; cIdx < 3; cIdx++) {
+                int SaoTypeIdx = (saoInfo->SaoTypeIdx >> (2*cIdx)) & 0x3;
+                // draw
+//                if (cIdx == 0) {
+//                    tint_rect(dst, stride, x0, y0, compSize, CtbSize, cols[SaoTypeIdx], pixelSize);
+//                }
+//                else
+//                    tint_rect(dst, stride, x0 + (cIdx - 1) * compSize, y0, compSize, CtbSize, cols[SaoTypeIdx], pixelSize);
+                tint_rect(dst, stride, x0 + cIdx * compSize, y0, compSize, CtbSize, cols[SaoTypeIdx], pixelSize);
+                
+            }
+            //int cIdx = 0;
+            // draw
+            
         }
     }
     
