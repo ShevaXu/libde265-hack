@@ -68,6 +68,10 @@ public slots:
   void showTiles(bool flag);
   void showSlices(bool flag);
   void showDecodedImage(bool flag);
+    // new
+    void showSaoInfo(bool flag);
+    void draw_custom_sao_info(const de265_image* img, uint8_t* dst, int stride, int pixelSize);
+    
 
 signals:
   void displayImage(QImage*);
@@ -102,6 +106,8 @@ private:
   bool   mShowMotionVec;
   bool   mShowTiles;
   bool   mShowSlices;
+    // new
+    bool mShowSao;
 
   void decoder_loop();
 

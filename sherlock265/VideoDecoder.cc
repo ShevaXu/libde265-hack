@@ -49,6 +49,7 @@ VideoDecoder::VideoDecoder()
     mShowQuantPY(false),
     mShowSlices(false),
     mShowTiles(false),
+    mShowSao(false),
     mFH(NULL)
 #ifdef HAVE_SWSCALE
     , sws(NULL)
@@ -261,6 +262,7 @@ void VideoDecoder::show_frame(const de265_image* img)
 
   // --- overlay coding-mode visualization ---
 
+    
   if (mShowQuantPY)
     {
       draw_QuantPY(img, ptr, bpl, 4);
@@ -304,6 +306,11 @@ void VideoDecoder::show_frame(const de265_image* img)
   if (mShowTiles)
     {
       draw_Tiles(img, ptr, bpl, 4);
+    }
+    
+    // new
+    if (mShowSao) {
+        draw_custom_sao_info(img, ptr, bpl, 4);
     }
 
   emit displayImage(qimg);
@@ -403,6 +410,58 @@ void VideoDecoder::showSlices(bool flag)
   mutex.unlock();
 }
 
+//new
+void VideoDecoder::showSaoInfo(bool flag)
+{
+    mShowSao = flag;
+    
+    mutex.lock();
+    if (img != NULL) { show_frame(img); }
+    mutex.unlock();
+}
+
+void tint_rect(uint8_t* img, int stride, int x0,int y0,int w,int h, uint32_t color, int pixelSize)
+{
+    for (int y=0;y<h;y++)
+        for (int x=0;x<w;x++)
+        {
+            int xp = x0+x;
+            int yp = y0+y;
+            
+            for (int i=0;i<pixelSize;i++) {
+                uint8_t col = (color>>(i*8)) & 0xFF;
+                img[yp*stride+xp*pixelSize + i] = (img[yp*stride+xp*pixelSize + i] + col)/2;
+            }
+        }
+}
+
+void VideoDecoder::draw_custom_sao_info(const de265_image* img, uint8_t* dst, int stride, int pixelSize)
+{
+    // TODO
+    
+    // red, blue, green
+    uint32_t cols[3] = { 0xff0000, 0x0000ff, 0x00ff00 };
+    
+    int CtbsH = img->sps.PicHeightInCtbsY;
+    int CtbsW = img->sps.PicWidthInCtbsY;
+    int CtbSize = img->sps.CtbSizeY;
+    
+    for (int yCtb = 0; yCtb < CtbsH - 1; yCtb++)
+    {
+        for (int xCtb = 0; xCtb < CtbsW; xCtb++)
+        {
+            const sao_info* saoInfo = img->get_sao_info(xCtb, yCtb);
+            int cIdx = 0;
+            int SaoTypeIdx = (saoInfo->SaoTypeIdx >> (2*cIdx)) & 0x3;
+            // draw
+            int x0 = xCtb * CtbSize;
+            int y0 = yCtb * CtbSize;
+            tint_rect(dst, stride, x0, y0, CtbSize, CtbSize, cols[SaoTypeIdx], pixelSize);
+        }
+    }
+    
+    QTextStream(stdout) << "hello sao world " << CtbsW << "x" << CtbsH << endl;
+}
 
 
 

@@ -95,6 +95,13 @@ VideoPlayer::VideoPlayer(const char* filename)
   QObject::connect(showDecodedImageButton, SIGNAL(toggled(bool)),
                    mDecoder, SLOT(showDecodedImage(bool)));
 
+    
+    // new
+    QPushButton* showSaoButton = new QPushButton("SAO");
+    showSaoButton->setCheckable(true);
+    QObject::connect(showSaoButton, SIGNAL(toggled(bool)),mDecoder, SLOT(showSaoInfo(bool)));
+    
+    
   QGridLayout *layout = new QGridLayout;
   layout->addWidget(videoWidget, 0,0,1,7);
   layout->addWidget(startButton, 1,0,1,1);
@@ -110,6 +117,9 @@ VideoPlayer::VideoPlayer(const char* filename)
   layout->addWidget(showPBPredModeButton,    2,4,1,1);
   layout->addWidget(showQuantPYButton,       2,5,1,1);
   layout->addWidget(showMotionVecButton,     2,6,1,1);
+    // new
+    layout->addWidget(showSaoButton,     1,3,1,1);
+    
   setLayout(layout);
 
 
