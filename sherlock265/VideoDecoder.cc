@@ -446,10 +446,12 @@ void VideoDecoder::draw_custom_sao_info(const de265_image* img, uint8_t* dst, in
     
     int CtbsH = img->sps.PicHeightInCtbsY;
     int CtbsW = img->sps.PicWidthInCtbsY;
+    int plH = img->get_height();
+    int plW = img->get_width();
     int CtbSize = img->sps.CtbSizeY;
     int compSize = CtbSize / 3; // for Y, U and V
     
-    for (int yCtb = 0; yCtb < CtbsH - 1; yCtb++)
+    for (int yCtb = 0; yCtb < CtbsH; yCtb++)
     {
         for (int xCtb = 0; xCtb < CtbsW; xCtb++)
         {
@@ -457,10 +459,18 @@ void VideoDecoder::draw_custom_sao_info(const de265_image* img, uint8_t* dst, in
             int x0 = xCtb * CtbSize;
             int y0 = yCtb * CtbSize;
             
-            //
+            // TODO: deal with x out of range
+            if (xCtb == CtbsW - 1 && x0 + CtbSize > plW) {
+                continue;
+            }
+            
+            // deal with y out of range
+            int drawH = (yCtb == CtbsH - 1 && y0 + CtbSize > plH)? plH - y0: CtbSize;
+            
+            // loop for 3 channels
             for (int cIdx = 0; cIdx < 3; cIdx++) {
                 int SaoTypeIdx = (saoInfo->SaoTypeIdx >> (2*cIdx)) & 0x3;
-                // draw
+                // draw with different color
                 uint32_t col = cols[SaoTypeIdx];
                 if (SaoTypeIdx == 2) {
                     // EO
@@ -474,17 +484,11 @@ void VideoDecoder::draw_custom_sao_info(const de265_image* img, uint8_t* dst, in
                         col = cols[3];
                     }
                 }
-                tint_rect(dst, stride, x0 + cIdx * compSize, y0, compSize, CtbSize, col, pixelSize);
-                
+                tint_rect(dst, stride, x0 + cIdx * compSize, y0, compSize, drawH, col, pixelSize);
             }
-            //int cIdx = 0;
-            // draw
-            
         }
     }
-    //int8_t temp = -12, t2 = -234;
-    //QTextStream(stdout) << abs(temp) << abs(t2) << endl;
-    QTextStream(stdout) << "hello sao world " << CtbsW << "x" << CtbsH << endl;
+    QTextStream(stdout) << "hello sao world " << CtbsW << "x" << CtbsH << "x" << CtbSize << "\t" << plW << "x" << plH << endl;
 }
 
 
