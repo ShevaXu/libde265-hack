@@ -446,6 +446,8 @@ void VideoDecoder::draw_custom_sao_info(const de265_image* img, uint8_t* dst, in
     // here for EO with offset abs < 1
     uint32_t cols[4] = { 0xff0000, 0x0000ff, 0x00ff00, 0xffff00 };
     
+    int sliceType = img->slices[0]->slice_type;
+    
     int CtbsH = img->sps.PicHeightInCtbsY;
     int CtbsW = img->sps.PicWidthInCtbsY;
     int plH = img->get_height();
@@ -475,24 +477,29 @@ void VideoDecoder::draw_custom_sao_info(const de265_image* img, uint8_t* dst, in
                 int SaoEoClass = (saoInfo->SaoEoClass >> (2*cIdx)) & 0x3;
                 // draw with different color
                 uint32_t col = cols[SaoTypeIdx];
-//                if (SaoTypeIdx == 2) {
-//                    // EO
-//                    int8_t offsets[4];
-//                    offsets[0] = abs(saoInfo->saoOffsetVal[cIdx][0]);
-//                    offsets[1] = abs(saoInfo->saoOffsetVal[cIdx][1]);
-//                    offsets[2] = abs(saoInfo->saoOffsetVal[cIdx][2]);
-//                    offsets[3] = abs(saoInfo->saoOffsetVal[cIdx][3]);
-//                    // all abs < 1
-//                    if (offsets[0] <= 1 && offsets[1] <= 1 && offsets[2] <= 1 && offsets[3] <= 1) {
-//                        col = cols[3];
-//                    }
-//                }
+                
+#if 0
+                if (SaoTypeIdx == 2) {
+                    // EO
+                    int8_t offsets[4];
+                    offsets[0] = abs(saoInfo->saoOffsetVal[cIdx][0]);
+                    offsets[1] = abs(saoInfo->saoOffsetVal[cIdx][1]);
+                    offsets[2] = abs(saoInfo->saoOffsetVal[cIdx][2]);
+                    offsets[3] = abs(saoInfo->saoOffsetVal[cIdx][3]);
+                    // all abs < 1
+                    if (offsets[0] <= 1 && offsets[1] <= 1 && offsets[2] <= 1 && offsets[3] <= 1) {
+                        col = cols[3];
+                    }
+                }
+#endif
+                
                 tint_rect(dst, stride, x0 + cIdx * compSize, y0, compSize, drawH, col, pixelSize);
                 
                 // log
                 if (SaoTypeIdx && mOutputF)
-                    fprintf(mOutputF, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
-                            mFrameCount, SaoTypeIdx, cIdx, SaoEoClass,
+                    fprintf(mOutputF, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
+                            mFrameCount, sliceType,
+                            SaoTypeIdx, cIdx, SaoEoClass,
                             saoInfo->saoOffsetVal[cIdx][0],
                             saoInfo->saoOffsetVal[cIdx][1],
                             saoInfo->saoOffsetVal[cIdx][2],
@@ -500,7 +507,7 @@ void VideoDecoder::draw_custom_sao_info(const de265_image* img, uint8_t* dst, in
             }
         }
     }
-    QTextStream(stdout) << "hello sao world " << CtbsW << "x" << CtbsH << "x" << CtbSize << "\t" << plW << "x" << plH << endl;
+    //QTextStream(stdout) << "hello sao world " << CtbsW << "x" << CtbsH << "x" << CtbSize << "\t" << plW << "x" << plH << endl;
 }
 
 
