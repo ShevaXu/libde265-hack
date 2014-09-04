@@ -40,6 +40,7 @@ extern "C" {
 #include "de265.h"
 
 
+
 class VideoDecoder : public QThread
 {
   Q_OBJECT
@@ -108,6 +109,7 @@ private:
   bool   mShowSlices;
     // new
     bool mShowSao;
+    FILE *mOutputF;
 
   void decoder_loop();
 

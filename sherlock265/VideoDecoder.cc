@@ -50,7 +50,9 @@ VideoDecoder::VideoDecoder()
     mShowSlices(false),
     mShowTiles(false),
     mShowSao(false),
-    mFH(NULL)
+    mFH(NULL),
+    // new
+    mOutputF(NULL)
 #ifdef HAVE_SWSCALE
     , sws(NULL)
     , width(0)
@@ -470,21 +472,31 @@ void VideoDecoder::draw_custom_sao_info(const de265_image* img, uint8_t* dst, in
             // loop for 3 channels
             for (int cIdx = 0; cIdx < 3; cIdx++) {
                 int SaoTypeIdx = (saoInfo->SaoTypeIdx >> (2*cIdx)) & 0x3;
+                int SaoEoClass = (saoInfo->SaoEoClass >> (2*cIdx)) & 0x3;
                 // draw with different color
                 uint32_t col = cols[SaoTypeIdx];
-                if (SaoTypeIdx == 2) {
-                    // EO
-                    int8_t offsets[4];
-                    offsets[0] = abs(saoInfo->saoOffsetVal[cIdx][0]);
-                    offsets[1] = abs(saoInfo->saoOffsetVal[cIdx][1]);
-                    offsets[2] = abs(saoInfo->saoOffsetVal[cIdx][2]);
-                    offsets[3] = abs(saoInfo->saoOffsetVal[cIdx][3]);
-                    // all abs < 1
-                    if (offsets[0] <= 1 && offsets[1] <= 1 && offsets[2] <= 1 && offsets[3] <= 1) {
-                        col = cols[3];
-                    }
-                }
+//                if (SaoTypeIdx == 2) {
+//                    // EO
+//                    int8_t offsets[4];
+//                    offsets[0] = abs(saoInfo->saoOffsetVal[cIdx][0]);
+//                    offsets[1] = abs(saoInfo->saoOffsetVal[cIdx][1]);
+//                    offsets[2] = abs(saoInfo->saoOffsetVal[cIdx][2]);
+//                    offsets[3] = abs(saoInfo->saoOffsetVal[cIdx][3]);
+//                    // all abs < 1
+//                    if (offsets[0] <= 1 && offsets[1] <= 1 && offsets[2] <= 1 && offsets[3] <= 1) {
+//                        col = cols[3];
+//                    }
+//                }
                 tint_rect(dst, stride, x0 + cIdx * compSize, y0, compSize, drawH, col, pixelSize);
+                
+                // log
+                if (SaoTypeIdx && mOutputF)
+                    fprintf(mOutputF, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
+                            mFrameCount, SaoTypeIdx, cIdx, SaoEoClass,
+                            saoInfo->saoOffsetVal[cIdx][0],
+                            saoInfo->saoOffsetVal[cIdx][1],
+                            saoInfo->saoOffsetVal[cIdx][2],
+                            saoInfo->saoOffsetVal[cIdx][3]);
             }
         }
     }
@@ -498,6 +510,8 @@ void VideoDecoder::init_decoder(const char* filename)
   mFH = fopen(filename,"rb");
   //init_file_context(&inputctx, filename);
   //rbsp_buffer_init(&buf);
+    
+    mOutputF = fopen("output_sao.txt", "w");
 
   ctx = de265_new_decoder();
   de265_start_worker_threads(ctx, 4); // start 4 background threads
@@ -506,6 +520,10 @@ void VideoDecoder::init_decoder(const char* filename)
 void VideoDecoder::free_decoder()
 {
   if (mFH) { fclose(mFH); }
+    
+    if (mOutputF) {
+        fclose(mOutputF);
+    }
 
   if (ctx) { de265_free_decoder(ctx); }
 }
