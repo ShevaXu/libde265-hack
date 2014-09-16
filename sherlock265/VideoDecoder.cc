@@ -52,7 +52,8 @@ VideoDecoder::VideoDecoder()
     mShowSao(false),
     mFH(NULL),
     // new
-    mOutputF(NULL)
+    mOutputSAO(NULL),
+    mOutputMV(NULL)
 #ifdef HAVE_SWSCALE
     , sws(NULL)
     , width(0)
@@ -297,7 +298,8 @@ void VideoDecoder::show_frame(const de265_image* img)
 
   if (mShowMotionVec)
     {
-      draw_Motion(img, ptr, bpl, 4);
+      //draw_Motion(img, ptr, bpl, 4);
+        draw_custom_mv_info(img, ptr, bpl, 4);
     }
 
   if (mShowSlices)
@@ -437,6 +439,41 @@ void tint_rect(uint8_t* img, int stride, int x0,int y0,int w,int h, uint32_t col
         }
 }
 
+void set_pixel(uint8_t* img, int x,int y, int stride, uint32_t color, int pixelSize)
+{
+    for (int i=0;i<pixelSize;i++) {
+        uint8_t col = (color>>(i*8)) & 0xFF;
+        img[y*stride + x*pixelSize + i] = col;
+    }
+}
+
+void draw_line(uint8_t* img,int stride,uint32_t color,int pixelSize,
+               int width,int height,
+               int x0,int y0,int x1,int y1)
+{
+    if (x1==x0 && y1==y0) {
+        set_pixel(img,x0,y0,stride,color,pixelSize);
+    }
+    else if (abs(x1-x0) < abs(y1-y0)) {
+        for (int y=y0;y<=y1;y += Sign(y1-y0))
+        {
+            int x = (y-y0)*(x1-x0)/(y1-y0) + x0;
+            
+            if (x>=0 && x<width && y>=0 && y<height)
+                set_pixel(img,x,y,stride,color,pixelSize);
+        }
+    }
+    else {
+        for (int x=x0;x<=x1;x += Sign(x1-x0))
+        {
+            int y = (x-x0)*(y1-y0)/(x1-x0) + y0;
+            
+            if (x>=0 && x<width && y>=0 && y<height)
+                set_pixel(img,x,y,stride,color,pixelSize);
+        }
+    }
+}
+
 void VideoDecoder::draw_custom_sao_info(const de265_image* img, uint8_t* dst, int stride, int pixelSize)
 {
     // TODO
@@ -496,8 +533,8 @@ void VideoDecoder::draw_custom_sao_info(const de265_image* img, uint8_t* dst, in
                 tint_rect(dst, stride, x0 + cIdx * compSize, y0, compSize, drawH, col, pixelSize);
                 
                 // log
-                if (SaoTypeIdx && mOutputF)
-                    fprintf(mOutputF, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
+                if (SaoTypeIdx && mOutputSAO)
+                    fprintf(mOutputSAO, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
                             mFrameCount, sliceType,
                             SaoTypeIdx, cIdx, SaoEoClass,
                             saoInfo->saoOffsetVal[cIdx][0],
@@ -510,6 +547,95 @@ void VideoDecoder::draw_custom_sao_info(const de265_image* img, uint8_t* dst, in
     //QTextStream(stdout) << "hello sao world " << CtbsW << "x" << CtbsH << "x" << CtbSize << "\t" << plW << "x" << plH << endl;
 }
 
+void VideoDecoder::draw_PB_mv(const de265_image* srcimg,uint8_t* img,int stride,
+                   int x0,int y0, int w,int h, int what, uint32_t color, int pixelSize)
+{
+    const PredVectorInfo* mvi = srcimg->get_mv_info(x0,y0);
+    int x = x0+w/2;
+    int y = y0+h/2;
+    
+    if (mvi->predFlag[0] && mvi->predFlag[1]) {
+        draw_line(img,stride,0xFF0000,pixelSize,
+                  srcimg->get_width(),
+                  srcimg->get_height(),
+                  x,y,x+mvi->mv[0].x,y+mvi->mv[0].y);
+        draw_line(img,stride,0x00FF00,pixelSize,
+                  srcimg->get_width(),
+                  srcimg->get_height(),
+                  x,y,x+mvi->mv[1].x,y+mvi->mv[1].y);
+        //
+        if (mOutputMV) {
+            fprintf(mOutputMV, "%d\t%d\t%d\t%d\n", mvi->mv[0].x, mvi->mv[0].y, mvi->mv[1].x, mvi->mv[1].y);
+        }
+    }
+}
+
+void VideoDecoder::draw_custom_mv_info(const de265_image* srcimg, uint8_t* img, int stride, int pixelSize)
+{
+    // redundant
+    int what = 0;
+    uint32_t color = 0;
+    
+    const seq_parameter_set* sps = &srcimg->sps;
+    int minCbSize = sps->MinCbSizeY;
+    
+    for (int y0=0;y0<sps->PicHeightInMinCbsY;y0++)
+        for (int x0=0;x0<sps->PicWidthInMinCbsY;x0++)
+        {
+            int log2CbSize = srcimg->get_log2CbSize_cbUnits(x0,y0);
+            if (log2CbSize==0) {
+                continue;
+            }
+            
+            int xb = x0*minCbSize;
+            int yb = y0*minCbSize;
+            
+            int CbSize = 1<<log2CbSize;
+            
+            enum PartMode partMode = srcimg->get_PartMode(xb,yb);
+            
+            int HalfCbSize = (1<<(log2CbSize-1));
+            
+            switch (partMode) {
+                case PART_2Nx2N:
+                    draw_PB_mv(srcimg,img,stride,xb,yb,CbSize,CbSize, what,color,pixelSize);
+                    break;
+                case PART_NxN:
+                    draw_PB_mv(srcimg,img,stride,xb,           yb,           CbSize/2,CbSize/2, what,color,pixelSize);
+                    draw_PB_mv(srcimg,img,stride,xb+HalfCbSize,yb,           CbSize/2,CbSize/2, what,color,pixelSize);
+                    draw_PB_mv(srcimg,img,stride,xb           ,yb+HalfCbSize,CbSize/2,CbSize/2, what,color,pixelSize);
+                    draw_PB_mv(srcimg,img,stride,xb+HalfCbSize,yb+HalfCbSize,CbSize/2,CbSize/2, what,color,pixelSize);
+                    break;
+                case PART_2NxN:
+                    draw_PB_mv(srcimg,img,stride,xb,           yb,           CbSize  ,CbSize/2, what,color,pixelSize);
+                    draw_PB_mv(srcimg,img,stride,xb,           yb+HalfCbSize,CbSize  ,CbSize/2, what,color,pixelSize);
+                    break;
+                case PART_Nx2N:
+                    draw_PB_mv(srcimg,img,stride,xb,           yb,           CbSize/2,CbSize, what,color,pixelSize);
+                    draw_PB_mv(srcimg,img,stride,xb+HalfCbSize,yb,           CbSize/2,CbSize, what,color,pixelSize);
+                    break;
+                case PART_2NxnU:
+                    draw_PB_mv(srcimg,img,stride,xb,           yb,           CbSize  ,CbSize/4,   what,color,pixelSize);
+                    draw_PB_mv(srcimg,img,stride,xb,           yb+CbSize/4  ,CbSize  ,CbSize*3/4, what,color,pixelSize);
+                    break;
+                case PART_2NxnD:
+                    draw_PB_mv(srcimg,img,stride,xb,           yb,           CbSize  ,CbSize*3/4, what,color,pixelSize);
+                    draw_PB_mv(srcimg,img,stride,xb,           yb+CbSize*3/4,CbSize  ,CbSize/4,   what,color,pixelSize);
+                    break;
+                case PART_nLx2N:
+                    draw_PB_mv(srcimg,img,stride,xb,           yb,           CbSize/4  ,CbSize, what,color,pixelSize);
+                    draw_PB_mv(srcimg,img,stride,xb+CbSize/4  ,yb,           CbSize*3/4,CbSize, what,color,pixelSize);
+                    break;
+                case PART_nRx2N:
+                    draw_PB_mv(srcimg,img,stride,xb,           yb,           CbSize*3/4,CbSize, what,color,pixelSize);
+                    draw_PB_mv(srcimg,img,stride,xb+CbSize*3/4,yb,           CbSize/4  ,CbSize, what,color,pixelSize);
+                    break;
+                default:
+                    assert(false);
+                    break;
+            }
+        }
+}
 
 
 void VideoDecoder::init_decoder(const char* filename)
@@ -518,7 +644,8 @@ void VideoDecoder::init_decoder(const char* filename)
   //init_file_context(&inputctx, filename);
   //rbsp_buffer_init(&buf);
     
-    mOutputF = fopen("output_sao.txt", "w");
+    mOutputSAO = fopen("output_sao.txt", "w");
+    mOutputMV = fopen("output_mv.txt", "w");
 
   ctx = de265_new_decoder();
   de265_start_worker_threads(ctx, 4); // start 4 background threads
@@ -528,8 +655,12 @@ void VideoDecoder::free_decoder()
 {
   if (mFH) { fclose(mFH); }
     
-    if (mOutputF) {
-        fclose(mOutputF);
+    if (mOutputSAO) {
+        fclose(mOutputSAO);
+    }
+    
+    if (mOutputMV) {
+        fclose(mOutputMV);
     }
 
   if (ctx) { de265_free_decoder(ctx); }

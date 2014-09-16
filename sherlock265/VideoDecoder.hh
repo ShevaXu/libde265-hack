@@ -72,6 +72,9 @@ public slots:
     // new
     void showSaoInfo(bool flag);
     void draw_custom_sao_info(const de265_image* img, uint8_t* dst, int stride, int pixelSize);
+    void draw_custom_mv_info(const de265_image* srcimg, uint8_t* img, int stride, int pixelSize);
+    void draw_PB_mv(const de265_image* srcimg,uint8_t* img,int stride,
+                    int x0,int y0, int w,int h, int what, uint32_t color, int pixelSize);
     
 
 signals:
@@ -109,7 +112,8 @@ private:
   bool   mShowSlices;
     // new
     bool mShowSao;
-    FILE *mOutputF;
+    FILE *mOutputSAO;
+    FILE *mOutputMV;
 
   void decoder_loop();
 
